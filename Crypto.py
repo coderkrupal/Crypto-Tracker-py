@@ -2,6 +2,7 @@ import requests
 import json
 import time
 import pyfiglet
+import csv
 
 
 RED = "\33[91m"
@@ -48,6 +49,7 @@ def CoinGecko():
     print("#########################################################")
 
 
+#  1 Price Change Analysis
 def price_change_analysis():
     url = "https://api.coingecko.com/api/v3/coins/markets"
     params = {
@@ -89,11 +91,111 @@ def analyze_price_changes(data):
         )
 
 
+# finish
+
+# market cap trends
+
+
+def get_global_market_data():
+    url = "https://api.coingecko.com/api/v3/global"
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = response.json()["data"]
+        return data
+    else:
+        print("Error fetching global market data:", response.status_code)
+        return None
+
+
+def get_top_cryptos_by_volume():
+    url = "https://api.coingecko.com/api/v3/coins/markets"
+    params = {
+        "vs_currency": "usd",
+        "order": "volume_desc",  # Sort by highest 24h volume
+        "per_page": 5,  # Fetch top 5 coins by volume
+        "page": 1,
+        "sparkline": False,
+    }
+
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        return response.json()
+    else:
+        print("Error fetching volume data:", response.status_code)
+        return []
+
+
+def display_market_insights():
+    global_data = get_global_market_data()
+    if global_data:
+        print("\n🌍 **Global Market Trends** 🌍")
+        print(f"Total Market Cap: ${global_data['total_market_cap']['usd']:,}")
+        print(
+            f"24h Market Cap Change: {global_data['market_cap_change_percentage_24h_usd']:.2f}%"
+        )
+        print(
+            f"📌 Bitcoin Dominance: {global_data['market_cap_percentage']['btc']:.2f}%"
+        )
+        print(
+            f"📌 Ethereum Dominance: {global_data['market_cap_percentage']['eth']:.2f}%"
+        )
+
+    cryptos = get_top_cryptos_by_volume()
+    if cryptos:
+        print("\n📊 **Top 5 Cryptos by 24h Trading Volume** 📊")
+        for coin in cryptos:
+            print(
+                f"{coin['name']} ({coin['symbol'].upper()}) - Volume: ${coin['total_volume']:,}"
+            )
+
+
+# finish
+
+
+# Function to fetch historical prices
+def get_historical_prices(crypto_id, days=50):
+    url = f"https://api.coingecko.com/api/v3/coins/{crypto_id}/market_chart"
+    params = {"vs_currency": "usd", "days": days, "interval": "daily"}
+
+    try:
+        response = requests.get(url, params=params)
+        print("🔍 API Response Status Code:", response.status_code)  # Debugging step
+
+        if response.status_code == 200:
+            data = response.json()
+            print("🔍 Raw API Response:", data)  # Print full API response for debugging
+
+            # Ensure 'prices' key exists and contains data
+            if "prices" in data and len(data["prices"]) > 0:
+                return [entry[1] for entry in data["prices"]]  # Extract closing prices
+
+        print("❌ Error: No data received from API or invalid response.")
+    except requests.exceptions.RequestException as e:
+        print("⚠️ Request failed:", str(e))
+    finally:
+        print("all complete")
+
+    return []
+
+
+def calculate_sma(prices, period):
+    if len(prices) < period:
+        return None  # Not enough data
+    return sum(prices[-period:]) / period  # Average of last 'period' days
+
+
+# maintenance code
+# finish
+
+#  csv file name decalre
+
+filename = "profile.csv"
+
+
 def main():
     print("1. Real-Time Cryptocurrency Price Tracking")
     print("2.Market Insights & Trends")
     print(" 3. Portfolio Management")
-    print("4.Market Data ")
     user_choice = int(input("which feature you want to show"))
     if user_choice == 1:
         print("welcome to Real-Time Cryptocurrency Price Tracking")
@@ -115,9 +217,59 @@ def main():
             crypto_data = price_change_analysis()
             if crypto_data:
                 analyze_price_changes(crypto_data)
+        elif price_choice == 2:
+            display_market_insights()
+        elif price_choice == 3:
+            crypto_id = input("enter a crypto ID [EX:bitcoin]")
+            crypto_days = int(input("enter days"))
+            prices = get_historical_prices(crypto_id, crypto_days)
+            if prices:
+                sma_7 = calculate_sma(prices, 7)
+                sma_50 = calculate_sma(prices, 50)
 
+            print(f"\n📊 ${crypto_id} (BTC) Moving Averages 📊")
+            print(f"Current Price: ${prices[-1]:,.2f}")
+            print(f"7-day SMA: ${sma_7:,.2f}")
+            print(f"50-day SMA: ${sma_50:,.2f}")
+
+        # Trend Analysis
+        if prices[-1] > sma_7:
+            print("✅ Price above 7-day SMA: Short-term Uptrend")
+        else:
+            print("❌ Price below 7-day SMA: Short-term Downtrend")
+
+        if prices[-1] > sma_50:
+            print("✅ Price above 50-day SMA: Long-term Bullish Trend")
+        else:
+            print("❌ Price below 50-day SMA: Long-term Bearish Trend")
     elif user_choice == 3:
         print("welcome to Portfolio Management")
+        print("1.add Cryptocurrnecy")
+        print("2.check your profile")
+        print("2.delete Cryptocurrnecy")
+        port_choice = int(input("please select:"))
+        if port_choice == 1:
+            crypto_name = input("Enter Crypto Symbol:")
+            crypto_ammount = input("Enter ammmount:")
+            purchase_price = input("Enter Purchase Price (per unit):")
+            portfolio = [f"${crypto_name},${crypto_ammount},${purchase_price}"]
+            with open(filename, mode="w", newline="") as file:
+                writer = csv.writer(file)
+                writer.writerows(portfolio)
+            print(f"Data has been written to {filename}")
+
+        if port_choice == 2:
+            print("wait we are fetching your data......")
+            rows = []
+            time.sleep(5)
+            with open(filename, mode="r", newline="") as csvfile:
+                csvreader = csv.reader(csvfile)
+                for row in csvreader:
+                    rows.append(row)
+
+                for row in rows:
+                    print(", ".join(row))  # Print each row on one line
+
     elif user_choice == 4:
         print("Market Data")
 
